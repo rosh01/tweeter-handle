@@ -1,0 +1,123 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Apr 14 19:48:07 2020
+
+@author: ronaidu
+"""
+
+'''
+Script Name : tweet_handle.py
+
+Inputs : 1) tweet_parm_handle.json
+                  
+Multi user execution : Yes
+Limitation : Tweets which are in English are read and written properly in output file, support for other langauge are not part of this code. 
+
+Output : tweet_hashtag.csv
+
+Description : The script downloads the specified number of tweets as per No_of_tweet mentioned in the tweet_parm.json along with location, screen_name,retweet_count,source of tweet and created_at (time of tweet). 
+'''
+
+
+#importing pakages
+import tweepy
+import csv
+import pandas as pd
+import os
+import json
+from time import gmtime, strftime
+
+print(strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime()))
+
+#read parameters from json file
+json_file_path = os.getcwd()
+
+#reading the paramters from the json file
+with open(json_file_path+"\\tweet_parm_handle.json") as json_file:
+    config = json.load(json_file)
+ 
+#reading parameters from json file 
+file_path = str(config['file_path'])
+No_of_tweet = int(config['No_of_tweet'])
+consumer_key = str(config['consumer_key'])
+consumer_secret = str(config['consumer_secret'])
+access_token = str(config['access_token'])
+access_token_secret = str(config['access_token_secret'])
+tweeter_handle = str(config['tweeter_handle']).split(sep=",")
+#tweet_since = str(config['tweet_since'])
+
+#creatig authentication using Tweeter credetials
+auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+auth.set_access_token(access_token, access_token_secret)
+api = tweepy.API(auth,wait_on_rate_limit=True)
+
+#remove the output file if exists
+#if os.path.exists(file_path):
+#    os.remove(file_path)
+#else:
+#    print("Can not delete the file as it doesn't exists")
+
+
+
+#####Covid Tweeter data extraction
+#declaring empty dataframe and list to append values
+df = pd.DataFrame()
+created_at = []
+tweet_location = []
+Screen_Name = []
+Retweet_count = []
+Fav_count = []
+Verified_Handle = []
+tweet_text = []
+
+
+print("Reading Tweets")
+
+for handle in tweeter_handle:
+    try:
+        tweets = tweepy.Cursor(api.user_timeline,
+                               id=handle,
+                               #until=tweet_since, #doesn't work
+                               ).items(No_of_tweet)
+    except tweepy.TweepError as e:
+        print(e)
+        if e == "[{u'message': u'Rate limit exceeded', u'code': 88}]":
+            time.sleep(60*5) #Sleep for 5 minutes
+            
+        elif e == "[{u'code': 401}]":
+            continue
+        
+        else:
+            print(e)
+
+
+    users_locs = [[tweet.user.screen_name,
+                   tweet.retweet_count,
+                   tweet.user.verified,
+                   tweet.created_at,
+                   tweet.text.encode('utf-8'),
+                   tweet.user.location,
+                   tweet.favorite_count,
+                   ] for tweet in tweets]
+
+    for i in range(len(users_locs)):
+        created_at.append(users_locs[i][3])
+        tweet_location.append(users_locs[i][5])
+        Screen_Name.append(users_locs[i][0])
+        Retweet_count.append(users_locs[i][1])
+        Verified_Handle.append(users_locs[i][2])
+        tweet_text.append(users_locs[i][4])
+        Fav_count.append(users_locs[i][6])
+    
+df['created_at'] = created_at
+df['tweet_location'] = tweet_location
+df['Screen_Name'] = Screen_Name
+df['Retweet_count'] = Retweet_count
+df['Fav_count'] = Fav_count
+df['Verified_Handle'] = Verified_Handle
+df['tweet_text'] = tweet_text
+
+
+print("writing tweets to file")
+df.to_csv(file_path,index = None,encoding='utf-8')
+print("File is Ready")
